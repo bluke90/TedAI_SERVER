@@ -1,5 +1,13 @@
 from sys import stdout as std
+from geopy.geocoders import Nominatim
 
+def geo_locate(location):
+    geoLoc = []
+    geolocator = Nominatim(user_agent="TedAI")
+    location = geolocator.geocode(location)
+    geoLoc.append(round(location.latitude, 4))
+    geoLoc.append(round(location.longitude, 4))
+    return geoLoc
 
 def cout(string):
     return std.write(string)

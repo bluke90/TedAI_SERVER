@@ -2,6 +2,7 @@ import requests
 from geopy.geocoders import Nominatim
 from bin.sysMath.formulas import convert_k_to_f
 from sys import stdout as std
+from bin.utils import geo_locate, cout
 
 class Weather:
     '''
@@ -12,20 +13,13 @@ class Weather:
     # API_KEY = '3c6e735bf5fdb9a6398004edcf295d4a'
 
     def __init__(self, location):
-        self.location = location; self.geoloc = []
-        std.write("#W>> Acquiring geolocation...\n")  # >
-        self.aquire_cords()
+        cout("#W>> Acquiring geolocation...\n")
+        self.location = location; self.geoloc = geo_locate(self.location)
         self.url = 'https://api.weather.gov/points/{},{}'.format(
             self.geoloc[0], self.geoloc[1])
         self.current_weather = {}; self.period_index = []; self.forecast = []
         self.initWeather()
 
-    def aquire_cords(self):
-        geolocator = Nominatim(user_agent="TedAI")
-        location = geolocator.geocode(self.location)
-        self.geoloc.append(round(location.latitude, 4))
-        self.geoloc.append(round(location.longitude, 4))
-        return
 
     def initWeather(self):
         self.current_weather = {}; self.period_index = []; self.forecast = []
@@ -99,11 +93,8 @@ class Weather:
             data = self.reqWeather('hour')
             self.process_weather(data, 'c')
         weather = "Currently: {}, the temperature is: {}, with {}, {} winds.".format(
-            self.current_weather['condition'],
-            self.current_weather['temp'],
-            self.current_weather['wind_speed'],
-            self.current_weather['wind_direction']
-        )
+            self.current_weather['condition'], self.current_weather['temp'],
+            self.current_weather['wind_speed'], self.current_weather['wind_direction'])
         return weather
 
 

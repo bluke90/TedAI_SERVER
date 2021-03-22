@@ -1,7 +1,9 @@
 from bin.inf.dictionary import WordHandle as WH
-
+from bin.system.connection import SQLConnection
 from bin.inf.weather import Weather
 from bin.system.contact import Contact
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
 
 '''
 TOR index:
@@ -16,7 +18,7 @@ Action Request(AR):
         Time Given: AR_R00
         Time Not Given: AR_R00x
     Send text:
-        without recipitant = AR_S00
+        without recipitant = AR_S00 
         with recipiant = AR_S01
     initate learning sequence = AR_SYSx0
 '''
@@ -27,7 +29,7 @@ class SpeechRecognition:
         'weather': ['forecast', 'weather'],
         'learning': ['learning', 'learn'],
         'dictionary': ['definition'],
-        'reminders': ['remind', 'reminders', 'reminder', 'to do'],
+        'remind': ['remind', 'reminders', 'reminder', 'to do'],
         'sms': ['sms', 'message', 'text']
     }
     # Language Directives
@@ -40,19 +42,24 @@ class SpeechRecognition:
     nouns = ['weather', 'text', 'forecast', 'definition', 'learning', 'data']
     determiner = ['the', 'a', 'an']
     time_periods = ['today', 'tomorrow', 'afternoon', 'tonight', 'night', 'evening', 'morning']
-    preposition = ['of', 'for']
+    preposition = ['of', 'for', 'at', 'on']
     obj_pronoun = ['me']
     sub_pronoun = ['I']
 
     def __init__(self):
         self.pos = []
-        self.userInput = 'what is the weather forecast for tomorrow'
+        self.userInput = ''
         self.reqType = ''
+        self.SQL = SQLConnection()
+        self._ = self.SQL.execSQL("SELECT * FROM lang_learning.like_req", fetch=1)
+        self.like_req = {}
+        for row in self._:
+            phrases = row[1].split(',')
+            self.like_req[row[2]] = phrases
 
     def determine(self, user_input):
         print(user_input)
         self.formatForDetermine(user_input)
-        code = ''
         if self.reqType == "IR":
             for word in SpeechRecognition.langSplit(self.userInput):
                 if word in self.FEATURE['weather']: # Weather Feature
@@ -72,7 +79,7 @@ class SpeechRecognition:
                     code = self.reqType + code
                     resp = {'r_code': code, 'word': output['word']}
                     return resp
-                elif word in self.FEATURE['reminders']:
+                elif word in self.FEATURE['remind']:
                     output = self.determineReminderReq()
                     code = output['code']
                     code = self.reqType + code
@@ -87,6 +94,8 @@ class SpeechRecognition:
                         return {'r_code': code, 'recip': output['recip']}
                     else:
                         return {'r_code': code}
+                if word in self.FEATURE['remind']:
+                    output = self.determineReminderAct()
 
     def formatForDetermine(self, userInput):
         self.userInput = userInput
@@ -148,6 +157,63 @@ class SpeechRecognition:
                 resp = {'code': '_R00', 'time': time}
                 return resp
 
+    def determineReminderAct(self):
+        dataSplit = SpeechRecognition.langSplit(self.userInput)
+        cursor = 0; subject = []; time_elements = []; lastword = ''
+        vLoc = self.pos.index('verb')
+        # check for time
+        for i, word in enumerate(dataSplit):
+            if word in self.time_periods:
+                time_elements.append(word); dataSplit.pop(i)
+                if dataSplit[i-1] in self.preposition: dataSplit.pop(i-1)
+            if ':' in word: time_elements.append(word); dataSplit.pop(i)
+            if word.isdigit() and dataSplit[i-1] in self.preposition:
+                time_elements.append(word); dataSplit.pop(i); dataSplit.pop(i-1)
+        # if reminder in sentance check for adjective
+        if 'reminder' in dataSplit:
+            cur = dataSplit.index('reminder') - 1
+            if self.pos[cur] == 'adj': dataSplit.pop(cur)
+            if self.pos[cur - 1] == 'determ': dataSplit.pop(cur - 1)
+        # discover subject
+        if vLoc > 0:
+            for word in range(0, (vLoc)):
+                dataSplit.pop(cursor)
+                cursor += 1
+        if dataSplit[cursor] == 'reminder':
+            dataSplit.pop(cursor)
+            cursor += 1
+        if dataSplit[cursor] in self.determiner:
+            dataSplit.pop(cursor)
+            cursor += 1
+
+
+# convert word to datetime
+
+
+
+    def phraseMatch(self, string):
+        for i, word in enumerate(string):
+            if self.isPrep(word):
+                string[i] = 'prep'
+        elements = []
+        for phrase in self.like_req:
+            phrase = phrase.split(' ')
+            wordCount = 0; removalCount = 0
+            for i, word in enumerate(string):
+                if word == 'prep':
+                    elements.append(string[i + 1])
+
+                if word == phrase[wordCount]:
+                    wordCount += 1; removalCount +=1
+
+
+
+
+    def isPrep(self, word):
+        if word in self.preposition:
+            return True
+        else:
+            return False
 
 
 

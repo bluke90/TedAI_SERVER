@@ -4,6 +4,8 @@ from time import sleep
 
 class TimeHandler:
 
+    time_periods = ['afternoon', 'tonight', 'morning', 'tomorrow', 'night']
+
     def __init__(self):
         self.date_time = datetime.now()
         self.timeUpdateThread = threading.Thread(target=self.update_time)
@@ -54,6 +56,13 @@ class TimeHandler:
                 return True
             else:
                 return False
+
+    def convertToDatetime(self, elements):
+        for _ in elements:
+            if _ in self.time_periods: period = _;
+        today = self.date_time
+
+
 
 
 def updateDateTime():

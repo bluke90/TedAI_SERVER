@@ -4,8 +4,8 @@ from geopy.geocoders import Nominatim
 from sys import stdout as std
 from bin.system.timeHandler import TimeHandler
 from datetime import time, datetime, timedelta
-from bin.system.connection import SQLHandler
-from bin.utils import cout
+from bin.system.connection import SQLConnection
+from bin.utils import cout, geo_locate
 
 
 
