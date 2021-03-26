@@ -1,0 +1,98 @@
+from nltk import word_tokenize, pos_tag, WordNetLemmatizer
+from nltk import RegexpParser, ne_chunk
+####!####
+# download('words')
+####!####
+'''
+# Array, Globals, Instances
+lemmatize = WordNetLemmatizer()
+
+# RegexParser Setup
+grammar = r"""
+    NP: {<DT|JJ|NN.*>+}          # Chunk sequences of DT, JJ, NN
+    {<NN><IN><CD>+$}
+    PP: {<IN><NP>}               # Chunk prepositions followed by NP
+    VP: {<VB.*><NP|PP|CLAUSE>+$} # Chunk verbs and their arguments
+    CLAUSE: {<NP><VP>}           # Chunk NP, VP
+    """
+cp = RegexpParser(grammar)
+
+string = "i have a class tomorrow at 5"
+
+tokens = word_tokenize(string)
+pos = pos_tag(tokens)
+string = lemmatize.lemmatize(string)
+ne = ne_chunk(pos)
+print(pos)
+print(cp.parse(pos))
+print(ne)
+'''
+
+#########################################################################################
+class LanguageProcessing:
+    LEMM = WordNetLemmatizer()
+    G_CASET = r"""
+        NP: {<IN>?<NN>?<IN>?<CD>}
+    """
+    G_CASE1 = r"""      # set a? new? reminder to go to the bank <time>
+        NP: {<PRP$><NN>}
+            {<DT|JJ|NN.*>+}          # Chunk sequences of DT, JJ, NN
+            {<IN><CD>}
+        PP: {<IN><NP>}               # Chunk prepositions followed by NP
+        VP: {<TO>?<VB.*><NP|PP|CLAUSE>+} # Chunk verbs and their arguments
+        CLAUSE: {<NP><VP>}           # Chunk NP, VP
+    """
+    G_CASE2 = r"""
+        NP: {<DT|JJ|NN.*>+}
+        PP: {<>}
+    """
+    PERIOD_REF = [
+        'right now',
+        'later',
+        'today',
+        'tonight',
+        'tomorrow',
+        'week',
+        'month',
+        'year',
+        'morning',
+        'afternoon',
+        'evening',
+        'night'
+    ]
+
+    def __init__(self):
+        self.string = None; self.tokens = None
+        self.pos_tagged = None; self.namedEntitys = None
+        self.grammar = r"""
+            NP: {<DT|JJ|NN.*>+}          # Chunk sequences of DT, JJ, NN
+            PP: {<IN><NP>}               # Chunk prepositions followed by NP
+            VP: {<VB.*><NP|PP|CLAUSE>+} # Chunk verbs and their arguments
+            CLAUSE: {<NP><VP>}           # Chunk NP, VP
+        """
+        self.cp = RegexpParser(self.G_CASE1, loop=2); self.chunks = None
+
+    def processSent(self, string):
+        self.string = string # self.LEMM.lemmatize(string)
+        self.tokens = word_tokenize(self.string)
+        self.pos_tagged = pos_tag(self.tokens)
+        self.namedEntitys = ne_chunk(self.pos_tagged)
+        return {
+            "raw_string": string,
+            "lemm_string": self.string,
+            "tokens": self.tokens,
+            "pos_tagged": self.pos_tagged,
+            "Chunking": {"named_entities": self.namedEntitys}
+        }
+
+    def chunkSent(self):
+        self.chunks = self.cp.parse(self.pos_tagged)
+        return self.chunks
+
+LP = LanguageProcessing()
+while True:
+    sent = "Set a new reminder to take my test tomorrow at 5:30"
+    LP.processSent(sent)
+    LP.chunkSent()
+
+
