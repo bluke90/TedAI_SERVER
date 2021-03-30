@@ -310,7 +310,7 @@ def main():
     stdout.write(f'{clr.OKGREEN}=======Starting Systems Initialization Sequence======={clr.ENDC}\n')
     systems_initialization()
     stdout.write(f'{clr.OKGREEN}==== All Systems Successfully Initialized ===={clr.ENDC}\n')
-    s = socket.socket()
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((SERVER_HOST, SERVER_PORT))
     s.listen(100)
     stdout.write(f"Listening as {SERVER_HOST}:{SERVER_PORT} ...\n")
