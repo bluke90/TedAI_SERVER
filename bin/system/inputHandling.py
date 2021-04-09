@@ -1,5 +1,8 @@
 from bin.inf.dictionary import WordHandle as WH
 from bin.system.connection import SQLConnection
+from bin.system.nlp.languageProcessing import LanguageProcessing
+from bin.system.nlp.determineReqType import analyse_intent, init_clf
+from bin.system.nlp import determineReqType
 from bin.inf.weather import Weather
 from bin.system.contact import Contact
 from nltk.tokenize import word_tokenize
@@ -33,29 +36,20 @@ class SpeechRecognition:
         'remind': ['remind', 'reminders', 'reminder', 'to do'],
         'sms': ['sms', 'message', 'text']
     }
-    # Language Directives
-    ACTION_REQ = ['i have']
-    INFORMATION_REQ = ['what is', 'how is', 'who is', 'where is', 'when is']
-    # Language
-    adverbs = ['what', 'how', 'why', 'to']
-    verbs = ['is', 'send', 'initiate', 'set', 'remind', 'do', 'have']
-    aux_verbs = ['do', 'have']
-    nouns = ['weather', 'text', 'forecast', 'definition', 'learning', 'data']
-    determiner = ['the', 'a', 'an']
-    time_periods = ['today', 'tomorrow', 'afternoon', 'tonight', 'night', 'evening', 'morning']
-    preposition = ['of', 'for', 'at', 'on']
-    obj_pronoun = ['me']
-    sub_pronoun = ['I']
     # Natural Language Processing
-    lemmatizer = WordNetLemmatizer()
+    LP = LanguageProcessing()
 
     def __init__(self):
         self.SQL = SQLConnection()  # !
         # Array Init
-        self.UIpos = []; self.userInput = ''; self.UIreqType = ''; self.like_req = {}
+        self.userInput = ''
+        self.like_req = {}
         # Get Data From Database : Stack Data to Dict.
         self.rawData = self.SQL.execSQL("SELECT * FROM lang_learning.like_req", fetch=1)
-        for row in self.rawData: phrases = row[1].split(','); self.like_req[row[2]] = phrases
+        for row in self.rawData:
+            phrases = row[1].split(',')
+            self.like_req[row[2]] = phrases
+
 
     def determine(self, user_input):
         print(user_input)
@@ -97,39 +91,23 @@ class SpeechRecognition:
                 if word in self.FEATURE['remind']:
                     output = self.determineReminderAct()
 
-    def formatForDetermine(self, userInput):
-        self.userInput = userInput
-        self.UItokens = word_tokenize()
-        self.UIpos = pos_tag(self.UItokens)
-        self.userInput = self.lemmatizer.lemmatize(self.userInput)
-        #self.pos = self.pos_identifier(user_input=self.userInput)
-        self.UIreqType = self.determineReqType()
+    def formatForDetermine(self, user_input):
+        self.userInput = user_input
+        ref_id = self.LP.queProcessing(self.userInput)
+        chunks = self.LP.completeQ(ref_id=ref_id)
+        self.time_chunk = (chunks['time_chunk'][0])    # list of trees
+        self.intent = (chunks['intent'][0])    # list of trees
+        self.subject = (chunks['subject'][0])  # list of trees
+        self.UIreqType = analyse_intent(self.intent)
 
-    def determineReqType(self):
-        dataSplit = SpeechRecognition.langSplit(self.userInput)
-        for _ in self.INFORMATION_REQ:
-            if _ in self.userInput:
-                return "IR"
-        if self.UIpos[0] == 'adv' and self.UIpos[1] == 'verb':
-            if dataSplit[0] =='what' or dataSplit[0] == 'how':
-                return "IR"
-        for _ in self.ACTION_REQ:
-            if _ in self.userInput:
-                return "AR"
-        for _ in self.verbs:
-            if _ in self.userInput:
-                return "AR"
-
-    def determineSmsReq(self):
+    def determineSmsReq(self):      # DEV
         if 'to' in self.userInput:
-            dataSplit = SpeechRecognition.langSplit(self.userInput)
-            recip = dataSplit[dataSplit.index('to') + 1]
-            output = {'code': "_S01", 'recip': recip}
+            output = {'code': "_S01", 'recip': ''}
             return output
         else:
             return {'code': "_S00"}
 
-    def determineWeatherReq(self):
+    def determineWeatherReq(self):      # DEV
         # what is the weather forecast for tomorrow
         time = None
         for word in self.time_periods:
@@ -140,10 +118,10 @@ class SpeechRecognition:
         elif time is None:
             return {'code': '_W00'}
 
-    def determineDictReq(self):
+    def determineDictReq(self):     # DEV
         # what is the definition of ****
         dataSplit = SpeechRecognition.langSplit(self.userInput)
-        wordIndex = self.UIpos.index('prep') + 1
+        wordIndex = self.subject.index('IN') + 1
         if dataSplit[wordIndex - 2] == 'definition':
             word = dataSplit[wordIndex]
             return {'code': '_D00', 'word': word}
@@ -151,62 +129,18 @@ class SpeechRecognition:
             print('error')
             return
 
-    def determineReminderReq(self):
+    def determineReminderReq(self):     # DEV
         #what do i have to do today
-        dataSplit = SpeechRecognition.langSplit(self.userInput)
-        for word in dataSplit:
+        for word, pos in self.time_chunk:
             if word in self.time_periods:
                 time = word
                 resp = {'code': '_R00', 'time': time}
                 return resp
 
-    def determineReminderAct(self):
-        dataSplit = SpeechRecognition.langSplit(self.userInput)
-        cursor = 0; subject = []; time_elements = []
-        vLoc = self.UIpos.index('verb')
-        # check for time | Chunk = NP: {<NN>+<IN>?<CD>}
-        for i, word in enumerate(dataSplit):
-            if word in self.time_periods:
-                time_elements.append(word); dataSplit.pop(i)
-                if dataSplit[i-1] in self.preposition: dataSplit.pop(i-1)
-            if ':' in word: time_elements.append(word); dataSplit.pop(i)
-            if word.isdigit() and dataSplit[i-1] in self.preposition:
-                time_elements.append(word); dataSplit.pop(i); dataSplit.pop(i-1)
-        # if reminder in sentance check for adjective
-        if 'reminder' in dataSplit:
-            cur = dataSplit.index('reminder') - 1
-            if self.UIpos[cur] == 'adj': dataSplit.pop(cur)
-            if self.UIpos[cur - 1] == 'determ': dataSplit.pop(cur - 1)
-        # discover subject
-        if vLoc > 0:
-            for word in range(0, (vLoc)):
-                dataSplit.pop(cursor)
-                cursor += 1
-        if dataSplit[cursor] == 'reminder':
-            dataSplit.pop(cursor)
-            cursor += 1
-        if dataSplit[cursor] in self.determiner:
-            dataSplit.pop(cursor)
-            cursor += 1
-        """
-        'Set reminder for tomorrow'
-        grammar = r'''
-            VP: {<VB.*>+<DT>?<JJ>?<NN>+<TO|IN>?}
-            NP: {<VB|NN><.*>.}
-            {<NN><IN>?<CD>}
-            '''
-        ne_chunk()
-        """
+    def determineReminderAct(self):     # DEV
+        print('Dev')
 
-
-# convert word to datetime
-
-
-
-    def phraseMatch(self, string):
-        for i, word in enumerate(string):
-            if self.isPrep(word):
-                string[i] = 'prep'
+    def phraseMatch(self, string):  # DEV
         elements = []
         for phrase in self.like_req:
             phrase = phrase.split(' ')
@@ -218,55 +152,9 @@ class SpeechRecognition:
                 if word == phrase[wordCount]:
                     wordCount += 1; removalCount +=1
 
-
-
-
-    def isPrep(self, word):
-        if word in self.preposition:
-            return True
-        else:
-            return False
-
-
-
-
-    @staticmethod
-    def langSplit(data):
-        data = data.split(' ')
-        dataSplit = []
-        for i, word in enumerate(data):
-            if word == 'to' and data[i + 1] == 'do':
-                dataSplit.append('to do')
-            else:
-                dataSplit.append(word)
-        return dataSplit
-
-    def pos_identifier(self, user_input):
-        pos = []
-        word_list = SpeechRecognition.langSplit(user_input)
-        for word in word_list:
-            if word in self.adverbs:
-                pos.append("adv")
-            elif word in self.verbs:
-                pos.append("verb")
-            elif word in self.aux_verbs:
-                pos.append("aux_verb")
-            elif word in self.nouns:
-                pos.append("noun")
-            elif word in self.determiner:
-                pos.append("determ")
-            elif word in self.preposition:
-                pos.append('prep')
-            elif word in self.sub_pronoun:
-                pos.append('sub')
-            elif word in self.obj_pronoun:
-                pos.append('obj')
-        return pos;
-
     def smsHandler(self, packet):
         packet.split('::')
         recip = packet[1]
-        packet
 
 
 

@@ -15,7 +15,6 @@ headers = {
 #print(response.text)
 
 
-
 class Dictionary:
 
     def __init__(self):

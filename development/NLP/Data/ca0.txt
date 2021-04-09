@@ -1,0 +1,10 @@
+I/prp have/vbp class/nn tomorrow/nn at/in 5:30/cd ./.
+I/prp have/vbp to/to go/vb take/vb my/prp$ test/nn Tuesday/nnp at/in 5/cd ./.
+I/prp will/md have/vb my/prp$ lecture/nn at/in 2/cd ./.
+Set/vb a/dt new/jj reminder/nn to/to go/vb to/to the/dt grocery/nn store/nn tomorrow/nn at/in 2/cd ./.
+Set/vb a/dt reminder/nn to/to take/vb the/dt kids/nns to/to soccer/nn at/in 1/cd ./.
+Set/nnp reminder/nn for/in March/nnp 3rd/cd to/to order/nn bones/nns ./.
+I/prp need/vbp to/to finish/vb my/prp$ homework/nn on/in March/nnp 3rd/cd by/in 2:30/cd ./.
+I/prp am/vbp going/vbg to/to the/dt beach/nn on/in the/dt 3rd/cd ./.
+What/wp is/vbz the/dt definition/nn of/in angry/jj ?/.
+

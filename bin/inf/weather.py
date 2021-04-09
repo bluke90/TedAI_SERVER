@@ -25,8 +25,8 @@ class Weather:
         self.current_weather = {}; self.period_index = []; self.forecast = []
         std.write("#W>> Retrieving Forecast Data...\n")
         data = self.reqWeather('forecast')
-        std.write("#W>> Success, Processing Forecast Data...\n")
         self.process_weather(data, 'f')
+        std.write("#W>> Success, Processing Forecast Data...\n")
         return
 
     def reqWeather(self, hour_or_forecast):

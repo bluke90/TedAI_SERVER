@@ -1,0 +1,280 @@
+import time
+import threading
+import queue
+from random import randint
+from sys import stdout as cout
+from bin.system.nlp.determineReqType import analyse_intent, init_clf
+from bin.system.timeHandler import TimeHandler
+from nltk import RegexpParser, ne_chunk, Tree
+from nltk import word_tokenize, pos_tag, WordNetLemmatizer
+from nltk import CoreNLPParser
+#########################################################################################
+
+
+class LanguageProcessing:
+    LEMM = WordNetLemmatizer()
+    TH = TimeHandler()
+    G_CASE_TIME = r"""
+        NP: {<IN|DT>+<PERIOD>}
+            {<PERIOD|NNP>+<IN><CD>}
+            {<PERIOD><PERIOD>}
+    CLAUSE: {<NP><IN><CD>}
+            {<IN><CD><NP>}
+    """
+    G_CASE_INTENT = r"""
+        VP: {^<WP><VBZ>}
+            {^<PRP><MD>?<VB.*><TO>?}
+            {^<VB.*|DT>+<JJ>?<NN>}
+            {^<PRP><VB.*><PRP\$|DT>*}
+            {^<PRP><VBD><TO>}
+    """
+    G_CASE_SUBJECT = r"""      # set a? new? reminder to go to the bank <time>   ???{^<NNS>?<VBP>+<TO>?}???
+        NP: {<PRP\$>?<DT|JJ|N.*>+}          # Chunk sequences of DT, JJ, NN
+        PP: {<IN|TO><NP>}               # Chunk prepositions followed by NP
+        VP: {<VB.*>+<TO>?<NP|PP|CLAUSE>+} # Chunk verbs and their arguments
+        CLAUSE: {<NP><VP|PP>}           # Chunk NP, VP
+    """
+    G_CASE_CONDITIONAL = r"""
+    """
+    PERIOD_REF = [
+        'right now', 'later', 'today',
+        'tonight', 'tomorrow', 'week',
+        'month', 'year', 'morning',
+        'afternoon', 'evening', 'night'
+    ]
+
+    def __init__(self, **kwargs):
+        self.ThreadLimit = kwargs['threads']
+        self.stringQ = queue.Queue()
+        self.complete = {}
+        self.ParserSubject = RegexpParser(self.G_CASE_SUBJECT)
+        self.ParserTime = RegexpParser(self.G_CASE_TIME)
+        self.ParserIntent = RegexpParser(self.G_CASE_INTENT)
+        self.coreNLP = self.core_nlp_init()
+        self.wrkrList = []
+        self.thread_initialization()
+
+    #>>> Thread handler
+    def thread_initialization(self):
+        for i in range(4):
+            wrkr = threading.Thread(target=self.worker, daemon=True)
+            wrkr.start()
+        return True
+
+    def queProcessing(self, string):
+        ref_id = randint(100, 999)
+        string = [ref_id, string]
+        self.stringQ.put(string)
+        self.complete[ref_id] = None
+        return ref_id
+
+    def worker(self):
+        wrkr_id = len(self.wrkrList) + 1    # Create Worker Thread Reference ID
+        cout.write('Worker Thread #{}: Initialization Successful...\n'.format(wrkr_id))
+        self.wrkrList.append(wrkr_id)
+        while True:
+            req = self.stringQ.get()
+            ref_id = req[0]; string = req[1]
+            cout.write('Worker {} processing request {}\n'.format(wrkr_id, str(ref_id)))
+            tokenized_sentance, tagged_sentance = self.process_with_core(string) if self.coreNLP == True else self.process_with_standard(string)
+            tagged_sentance = self.parse_period_ref(tagged_sentance)
+            chunks = self.chunkSent(tagged_sentance)
+            self.complete[ref_id] = chunks
+            cout.write('Worker {} completed request {}\n'.format(wrkr_id, str(ref_id)))
+            self.stringQ.task_done()
+
+    def completeQ(self, **kwargs):
+        if kwargs.get('ref_id') is not None:
+            if type(kwargs['ref_id']) is str or type(kwargs['ref_id']) is int:
+                while self.complete[kwargs['ref_id']] is None: continue
+                output = self.complete.pop(kwargs['ref_id'])
+                return output
+            elif type(kwargs['ref_id']) is list:
+                output = []
+                while True:
+                    for elem_id in kwargs['ref_id']:
+                        completed_elem = self.complete.get(elem_id)
+                        if completed_elem is not None:
+                            output.append(completed_elem)
+                            self.complete.pop(ref_id)
+                        elif len(kwargs['ref_if']) == 0:
+                            return output
+
+        elif kwargs.get('all') is True:
+            self.stringQ.join()
+            output = []
+            for elem in list(self.complete):
+                output.append(self.complete.pop(elem))
+            return output
+
+    ###############################
+
+    def core_nlp_init(self):
+        try:
+            self.parser = CoreNLPParser(url='http://localhost:9000', tagtype='pos')
+            return True
+        except:
+            cout.write("!CoreNLP Failure!\n")
+            return False
+
+    # Process string for language processing
+    def process_sent(self, string):
+        """Processes the sentence using CoreNLPParser,
+        returning a list of tokenized words and
+        a list of tokens tagged with their corresponding Part of Speech Tags\n
+        :param string: the string to be processed
+        :returns: tokenized_string, tagged_string"""
+        if not self.coreNLP:    # Check if CoreNLP Server is Available
+            self.process_with_standard(string)
+        elif self.coreNLP:  # Use CoreNLP if Available
+            tokenized_string, tagged_string = self.process_with_core(string)
+        else:
+            raise Exception("Error in Processing sentence")
+        return tokens, pos_tagged
+
+    # Process using CoreNLPParser
+    def process_with_core(self, string):
+        """Process the sentence using CoreNLPParser,
+        returning a list of tokenized words and
+        a list of tokens tagged with their corresponding Part of Speech Tags\n
+        :param string: the string to be processed
+        :returns: tokenized_string, tagged_string"""
+        tokenized_string = list(self.parser.tokenize(string))
+        tagged_string = list(self.parser.tag(tokenized_string))
+
+
+    # Process using nltk standard parser
+    def process_with_standard(self, string):
+        """Process the sentence using NLTK Standard Parser,
+        returning a list of tokenized words and
+        a list of tokens tagged with their corresponding Part of Speech Tags\n
+        :param string: the string to be processed
+        :returns: tokenized_string, tagged_string"""
+        tokenized_string = word_tokenize(string)
+        tagged_string = pos_tag(tokenized_string)
+
+    # Handle Sentace Chunking
+    def chunkSent(self, pos_tagged):
+        phrases = {'time_chunk': [], 'subject': [], 'intent': []}
+        #   Discover Time Chunk
+        chunk = self.ParserTime.parse(pos_tagged)   # tag time chunk
+        for i, subtree in enumerate(chunk):   #
+            if type(subtree) == Tree:
+                phrases['time_chunk'].append(chunk.pop(i))
+        if len(phrases['time_chunk']) == 0: phrases['time_chunk'] = None
+        chunk = self.ParserIntent.parse(chunk)
+        for i, subtree in enumerate(chunk):
+            if type(subtree) == Tree:
+                phrases['intent'].append(chunk.pop(i))
+        chunk = self.ParserSubject.parse(chunk)
+        if type(chunk) == Tree:
+            phrases['subject'].append(chunk)
+        else:
+            for i, subtree in enumerate(chunk):
+                if type(subtree) == Tree:
+                    phrases['subject'].append(chunk.pop(i))
+        return phrases
+
+    @staticmethod
+    def untag(tagged_sentence):
+        return [w for w, t in tagged_sentence]
+
+    @staticmethod
+    def phrase2string(phrase):
+        string = [" ".join([token for token, pos in phrase.leaves()])]
+        return " ".join(string)
+
+    @staticmethod
+    def parse_period_ref(tagged):
+        period_ref = [
+            'right now', 'later', 'today',
+            'tonight', 'tomorrow', 'week',
+            'month', 'year', 'morning',
+            'afternoon', 'evening', 'night'
+        ]
+        for i, tup in enumerate(tagged):
+            if tup[0] in period_ref:
+                new = (tup[0], 'PERIOD')
+                tagged[i] = new
+        return tagged
+
+    @staticmethod
+    def convert_time_chunk(time_chunk):
+        # (CLAUSE at/IN 5/CD (NP in/IN the/DT morning/PERIOD))
+        # Var Scope
+        feature_tagged = []
+        priority_tags = ['NNP', 'PERIOD', 'CD']
+
+        # remove determiner words from chunk
+        for token, pos in list(time_chunk):
+            if pos == 'DT':
+                time_chunk.remove((token, pos))
+
+        # get features for words if its a Proper Noun('March'), Period('tomorrow'), or digit('5:30)
+        for token, pos in list(time_chunk):
+            if pos in priority_tags:
+                feature_tagged.append(LanguageProcessing.time_chunk_features(time_chunk, (token, pos)))
+
+        # assess feature tagged tokens for time and date information
+        for elem in feature_tagged:
+            cout.write("{}\n".format(elem))
+        for elem in feature_tagged:
+            if elem['pos'] == 'PERIOD':
+                if elem['next_elem_1'][1] == 'PERIOD':
+
+            elif elem['pos'] == 'NNP':
+                _date = elem
+
+
+
+        # (CLAUSE 5/CD (NP morning/PERIOD))
+
+    @staticmethod
+    def time_chunk_features(time_chunk, token):
+        index = time_chunk.index(token)
+        return {
+            'word': time_chunk[index][0],
+            'pos': time_chunk[index][1],
+            'prev_elem_1': '' if index == 0 else time_chunk[index - 1],
+            'prev_elem_2': '' if index < 2 else time_chunk[index - 2],
+            'next_elem_1': '' if index == len(time_chunk) - 1 else time_chunk[index + 1],
+            'next_elem_2': '' if index > len(time_chunk) - 2 else time_chunk[index + 2],
+            'is_digit': True if type(time_chunk[index][0].isdigit()) else False,
+            'token_digit': True if index != len(time_chunk) - 1 and time_chunk[index + 1][1] == 'CD' else False,
+            'digit_token': True if index != 0 and time_chunk[index - 1][1] == 'CD' else False
+        }
+
+    @staticmethod
+    def chunk_features(elem_1, elem_2):
+        """elem1, elem2 features are combined
+         then inserted into the time_chunk replacing
+         the 2 elements"""
+        return {
+            'word': '{} {}'.format(elem_1[0], elem_2[0]),
+            'pos': elem_1[1],
+            'prev_elem_1': elem_1['prev_elem_1'],
+            'prev_elem_2': elem_1['prev_elem_2'],
+            'next_elem_1': elem_2['next_elem_1'],
+            'next_elem_2': elem_2['next_elem_2'],
+            'is_digit': True if type(elem_1) ==
+        }
+
+#########################################
+init_clf()
+defReq = 'I got to get up at 5 in the morning'
+LP = LanguageProcessing(threads=4)
+ST = time.process_time()
+ref_id = LP.queProcessing(defReq)
+chunks = LP.completeQ(ref_id=ref_id)
+time_chunk = None if chunks['time_chunk'] == None else chunks['time_chunk'][0]  # list of trees
+intent = (chunks['intent'][0])  # list of trees
+subject = (chunks['subject'][0])  # list of trees
+
+time_chunk = LP.convert_time_chunk(time_chunk.leaves())
+reqType = analyse_intent(intent)
+print("--- %.2f seconds" % (time.process_time() - ST))
+print(chunks)
+print(time_chunk)
+print(intent)
+print(subject)
+print(reqType)
