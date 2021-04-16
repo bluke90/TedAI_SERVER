@@ -43,23 +43,24 @@ class SpeechRecognition:
         self.SQL = SQLConnection()  # !
         # Array Init
         self.userInput = ''
+        """
         self.like_req = {}
         # Get Data From Database : Stack Data to Dict.
         self.rawData = self.SQL.execSQL("SELECT * FROM lang_learning.like_req", fetch=1)
         for row in self.rawData:
             phrases = row[1].split(',')
             self.like_req[row[2]] = phrases
-
+        """
 
     def determine(self, user_input):
         print(user_input)
-        self.formatForDetermine(user_input)
-        if self.UIreqType == "IR":
+        chunks = self.format_input(user_input)
+        if chunks['req_type'] == "IR":
             for word in SpeechRecognition.langSplit(self.userInput):
                 if word in self.FEATURE['weather']: # Weather Feature
                     output = self.determineWeatherReq()
                     code = output['code']
-                    code = self.UIreqType + code
+                    code = chunks['req_type'] + code
                     if code == 'IR_W01':
                         time = output['time']
                         resp = {'r_code': code, 'time': time}
@@ -70,20 +71,20 @@ class SpeechRecognition:
                 elif word in self.FEATURE['dictionary']:
                     output = self.determineDictReq()
                     code = output['code']
-                    code = self.UIreqType + code
+                    code = chunks['req_type'] + code
                     resp = {'r_code': code, 'word': output['word']}
                     return resp
                 elif word in self.FEATURE['remind']:
                     output = self.determineReminderReq()
                     code = output['code']
-                    code = self.UIreqType + code
+                    code = chunks['req_type'] + code
                     resp = {'r_code': code, 'time': output['time']}
                     return resp
-        elif self.UIreqType == "AR":
+        elif chunks['req_type'] == "AR":
             for word in SpeechRecognition.langSplit(self.userInput):
                 if word in self.FEATURE['sms']:
                     output = self.determineSmsReq()
-                    code = output['code']; code = self.UIreqType + code
+                    code = output['code']; code = chunks['req_type'] + code
                     if code == 'AR_S01':
                         return {'r_code': code, 'recip': output['recip']}
                     else:
@@ -91,15 +92,28 @@ class SpeechRecognition:
                 if word in self.FEATURE['remind']:
                     output = self.determineReminderAct()
 
-    def formatForDetermine(self, user_input):
-        self.userInput = user_input
-        ref_id = self.LP.queProcessing(self.userInput)
+    def format_input(self, user_input):
+        """
+        Format User Input using Natural Language Processing.\n
+        Returns: <Dictionary>
+            * ['time_chunk'] - Chunk containing date/time information
+            * ['intent'] - Chunk containing implied intent
+            * ['subject'] - Chunk Containing subject
+            * ['req_type'] - Type of request determined by Algorithm\n
+        :param user_input: The inputted sentence for processing.
+        """
+        ref_id = self.LP.queProcessing(user_input)
         chunks = self.LP.completeQ(ref_id=ref_id)
-        self.time_chunk = (chunks['time_chunk'][0])    # list of trees
-        self.intent = (chunks['intent'][0])    # list of trees
-        self.subject = (chunks['subject'][0])  # list of trees
-        self.UIreqType = analyse_intent(self.intent)
-
+        time_chunk = (chunks['time_chunk'][0])    # list of trees
+        intent = (chunks['intent'][0])    # list of trees
+        subject = (chunks['subject'][0])  # list of trees
+        req_type = analyse_intent(intent)
+        return {
+            'time_chunk': time_chunk,
+            'intent': intent,
+            'subject': subject,
+            'req_type': req_type
+        }
     def determineSmsReq(self):      # DEV
         if 'to' in self.userInput:
             output = {'code': "_S01", 'recip': ''}

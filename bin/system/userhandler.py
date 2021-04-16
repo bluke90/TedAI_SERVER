@@ -4,8 +4,16 @@ from bin.system.timeHandler import TimeHandler
 from datetime import timedelta
 
 class UserHandler:
-
+    """
+     User object: Handles the individual data for each user
+    """
     def __init__(self, token): # sql time
+        """
+        Initialize user object
+        * class Variables: token, username, userdata<dict>
+
+        :param token:
+        """
         cout('#U>> Initializing User Instance...\n')
         self.SQL = SQLConnection()
         self.time = TimeHandler()
