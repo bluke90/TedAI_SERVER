@@ -9,6 +9,7 @@ class Connection:
     def __init__(self, conn, addr):
         self.conn = conn
         self.addr = addr
+        conn.setsockopt(conn.SOL_SOCKET, conn.SO_SNDBUF, BUFFER_SIZE)
         self.conn.send("Connection Successful...\n".encode())
         self.token = int(self.conn.recv(BUFFER_SIZE).decode())
 

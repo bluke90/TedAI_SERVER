@@ -207,14 +207,12 @@ class LanguageProcessing:
         :return:
         """
         # Var Scope
-        priority_tags = ['NNP', 'PERIOD', 'CD']
+        priority_tags = ['NNP', 'PERIOD', 'CD']; number_suffix = ['rd', 'th', 'st', 'nd']
         feature_tagged, _time, _date, _day = [], [], [], []
-
         # remove determiner words from chunk
         for token, pos in list(time_chunk):
             if pos == 'DT':
                 time_chunk.remove((token, pos))
-
         # Get features for words if its a
         # Proper Noun('March'), Period('tomorrow'), or digit('5:30)
         _index = 0
@@ -223,7 +221,6 @@ class LanguageProcessing:
                 feature_tagged.append(LanguageProcessing.time_chunk_features(time_chunk, (token, pos), new_index=_index))
                 _index += 1
                 continue
-
         # Assess feature tagged tokens for time and date information
         '''MM:DD:YY HH:MM | PERIOD{Tuesday = DD, Morning = TT} DIGIT|CD{5:30 = TT, 5th = DD} NNP{March = DD, Tuesday = DD}'''
         period_perm = permutations(['CD', 'IN'])
@@ -231,15 +228,12 @@ class LanguageProcessing:
             if elem['pos'] == 'NNP':
                 if elem['next_elem_1'] == 'NNP':
                     feature_tagged, elem = LanguageProcessing.merge_features(feature_tagged[i], feature_tagged[i+1], feature_tagged)
-
-                if elem['next_elem_1'] == 'CD' and (elem['next_elem_1']):
-
-
+                if elem['next_elem_1'] == 'CD':     # next elem_1 digit check
+                    for suffix in number_suffix:
+                        if suffix in elem['next_elem_1']:
+                            _time.append((feature_tagged[i], elem['next_elem_1']))
+                # prev elements digit check
                 _time.append(LanguageProcessing.digit_check(elem, next_elem=False))
-
-
-
-
 
         for i, elem in enumerate(feature_tagged):
             if elem['pos'] == 'PERIOD':
